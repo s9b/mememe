@@ -1,0 +1,148 @@
+{
+  "templates": [
+    {
+      "id": "181913649",
+      "name": "Drake Hotline Bling",
+      "keywords": ["drake", "hotline bling", "approval", "disapproval"],
+      "placeholderTextPositions": ["top", "bottom"],
+      "exampleCaptionHints": ["Something you don't like", "Something you prefer"],
+      "isAdSafe": true,
+      "imgUrl": "",
+      "width": 1200,
+      "height": 1200,
+      "box_count": 2
+    },
+    {
+      "id": "87743020",
+      "name": "Two Buttons",
+      "keywords": ["buttons", "choice", "decision", "dilemma"],
+      "placeholderTextPositions": ["top", "both"],
+      "exampleCaptionHints": ["First difficult choice", "Second difficult choice", "Person sweating over decision"],
+      "isAdSafe": true,
+      "imgUrl": "",
+      "width": 600,
+      "height": 908,
+      "box_count": 3
+    },
+    {
+      "id": "112126428",
+      "name": "Distracted Boyfriend",
+      "keywords": ["distracted", "boyfriend", "jealous", "looking"],
+      "placeholderTextPositions": ["both"],
+      "exampleCaptionHints": ["The thing you're ignoring", "The new shiny thing", "You"],
+      "isAdSafe": false,
+      "imgUrl": "",
+      "width": 1200,
+      "height": 800,
+      "box_count": 3
+    },
+    {
+      "id": "131087935",
+      "name": "Running Away Balloon",
+      "keywords": ["balloon", "running", "chase", "escaping"],
+      "placeholderTextPositions": ["both"],
+      "exampleCaptionHints": ["Thing that's getting away", "Person trying to catch it", "Other labels"],
+      "isAdSafe": true,
+      "imgUrl": "",
+      "width": 761,
+      "height": 1024,
+      "box_count": 5
+    },
+    {
+      "id": "129242436",
+      "name": "Change My Mind",
+      "keywords": ["change", "mind", "opinion", "debate", "crowder"],
+      "placeholderTextPositions": ["top"],
+      "exampleCaptionHints": ["Controversial opinion you hold"],
+      "isAdSafe": true,
+      "imgUrl": "",
+      "width": 482,
+      "height": 361,
+      "box_count": 2
+    },
+    {
+      "id": "124822590",
+      "name": "Left Exit 12 Off Ramp",
+      "keywords": ["exit", "highway", "car", "decision"],
+      "placeholderTextPositions": ["both"],
+      "exampleCaptionHints": ["The unexpected choice", "The obvious choice", "The person/thing making the choice"],
+      "isAdSafe": true,
+      "imgUrl": "",
+      "width": 804,
+      "height": 767,
+      "box_count": 3
+    },
+    {
+      "id": "217743513",
+      "name": "UNO Draw 25 Cards",
+      "keywords": ["uno", "cards", "draw", "choice"],
+      "placeholderTextPositions": ["top", "bottom"],
+      "exampleCaptionHints": ["Thing you don't want to do", "Person choosing to draw 25 cards instead"],
+      "isAdSafe": true,
+      "imgUrl": "",
+      "width": 500,
+      "height": 494,
+      "box_count": 2
+    },
+    {
+      "id": "222403160",
+      "name": "Bernie I Am Once Again Asking For Your Support",
+      "keywords": ["bernie", "sanders", "asking", "support", "political"],
+      "placeholderTextPositions": ["bottom"],
+      "exampleCaptionHints": ["I am once again asking for [something]"],
+      "isAdSafe": false,
+      "imgUrl": "",
+      "width": 750,
+      "height": 750,
+      "box_count": 2
+    },
+    {
+      "id": "131940431",
+      "name": "Gru's Plan",
+      "keywords": ["gru", "plan", "despicable me", "steps", "plot twist"],
+      "placeholderTextPositions": ["both"],
+      "exampleCaptionHints": ["Step 1", "Step 2", "Step 3", "Unexpected outcome"],
+      "isAdSafe": true,
+      "imgUrl": "",
+      "width": 700,
+      "height": 449,
+      "box_count": 4
+    },
+    {
+      "id": "4087833",
+      "name": "Waiting Skeleton",
+      "keywords": ["skeleton", "waiting", "patience", "dead"],
+      "placeholderTextPositions": ["bottom"],
+      "exampleCaptionHints": ["Still waiting for [something that's taking forever]"],
+      "isAdSafe": true,
+      "imgUrl": "",
+      "width": 298,
+      "height": 403,
+      "box_count": 2
+    },
+    {
+      "id": "102156234",
+      "name": "Mocking SpongeBob",
+      "keywords": ["spongebob", "mocking", "sarcasm", "ridicule"],
+      "placeholderTextPositions": ["top", "bottom"],
+      "exampleCaptionHints": ["Normal statement", "MoCkInG vErSiOn Of StAtEmEnT"],
+      "isAdSafe": true,
+      "imgUrl": "",
+      "width": 502,
+      "height": 353,
+      "box_count": 2
+    },
+    {
+      "id": "93895088",
+      "name": "Expanding Brain",
+      "keywords": ["brain", "expanding", "intelligence", "irony", "evolution"],
+      "placeholderTextPositions": ["both"],
+      "exampleCaptionHints": ["Basic idea", "Better idea", "Even better idea", "Transcendent idea"],
+      "isAdSafe": true,
+      "imgUrl": "",
+      "width": 857,
+      "height": 1202,
+      "box_count": 4
+    }
+  ]
+}
