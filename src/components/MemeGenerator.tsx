@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import AdBanner, { useAdSafety } from './AdBanner';
+import AuthModal from './AuthModal';
+import { useAuth } from '../hooks/useAuth';
 import templatesData from '../data/templates.json';
 
 // Mock types to match your existing structure
@@ -16,17 +18,25 @@ interface Template {
 }
 
 const MemeGenerator: React.FC = () => {
+  const { user, loading: authLoading } = useAuth();
   const [results, setResults] = useState<MemeResult[] | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [topic, setTopic] = useState('');
   const [usedTemplateIds, setUsedTemplateIds] = useState<string[]>([]);
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   const templates: Template[] = templatesData.templates;
   const isAdSafe = useAdSafety(results, templates);
 
   const handleGenerate = async () => {
     if (!topic.trim()) return;
+    
+    // Check if user is authenticated
+    if (!user) {
+      setShowAuthModal(true);
+      return;
+    }
 
     setIsLoading(true);
     try {
@@ -59,6 +69,12 @@ const MemeGenerator: React.FC = () => {
 
   const handleRegenerate = async () => {
     if (!results || results.length === 0 || !topic.trim()) return;
+    
+    // Check if user is authenticated
+    if (!user) {
+      setShowAuthModal(true);
+      return;
+    }
 
     setIsRegenerating(true);
     try {
@@ -212,9 +228,32 @@ const MemeGenerator: React.FC = () => {
       )}
 
       {/* Empty State */}
-      {!results && !isLoading && (
+      {!results && !isLoading && !isRegenerating && (
         <div className="text-center py-12 text-gray-500">
-          <p>Enter a topic above to generate memes!</p>
+          {authLoading ? (
+            <div className="flex items-center justify-center">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+              <span className="ml-2">Loading...</span>
+            </div>
+          ) : !user ? (
+            <div className="max-w-md mx-auto">
+              <div className="text-6xl mb-4">🎨</div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                Ready to Create Amazing Memes?
+              </h3>
+              <p className="text-gray-600 mb-6">
+                Sign in to start generating hilarious, AI-powered memes instantly!
+              </p>
+              <button
+                onClick={() => setShowAuthModal(true)}
+                className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              >
+                Get Started - It's Free! 🚀
+              </button>
+            </div>
+          ) : (
+            <p>Enter a topic above to generate memes!</p>
+          )}
         </div>
       )}
 
@@ -228,6 +267,12 @@ const MemeGenerator: React.FC = () => {
           className="max-w-4xl mx-auto"
         />
       </div>
+      
+      {/* Auth Modal */}
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+      />
     </div>
   );
 };
