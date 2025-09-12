@@ -57,8 +57,8 @@ export function initTelemetry(): void {
           capture_pageleave: true,
           // Respect user privacy
           respect_dnt: true,
-          // Don't track in development unless explicitly enabled
-          disabled: process.env.NODE_ENV === 'development' && !process.env.NEXT_PUBLIC_POSTHOG_DEBUG,
+          // Disable autocapture in development unless explicitly enabled
+          autocapture: process.env.NODE_ENV !== 'development' || !!process.env.NEXT_PUBLIC_POSTHOG_DEBUG,
         });
       }).catch((error) => {
         console.error('Failed to initialize PostHog:', error);
