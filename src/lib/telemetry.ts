@@ -33,13 +33,8 @@ export function initTelemetry(): void {
           }
           return event;
         },
-        integrations: [
-          // Enable performance monitoring
-          new Sentry.BrowserTracing({
-            // Set sampling rate for performance monitoring
-            tracingOrigins: ['localhost', /^\/api/],
-          }),
-        ],
+        // Note: BrowserTracing is automatically included in @sentry/nextjs
+        // No need to manually add integrations for basic setup
       });
       
       console.log('Sentry initialized successfully');
