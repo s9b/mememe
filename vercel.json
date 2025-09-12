@@ -4,7 +4,6 @@
   "outputDirectory": ".next",
   "installCommand": "npm ci",
   "devCommand": "npm run dev",
-  "regions": ["iad1", "sfo1"],
   "functions": {
     "src/pages/api/**/*.ts": {
       "maxDuration": 30
