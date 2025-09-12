@@ -199,11 +199,19 @@ export function trackPageView(page?: string): void {
 }
 
 /**
- * Start a Sentry transaction for performance monitoring
+ * Start a Sentry transaction/span for performance monitoring
  */
-export function startTransaction(name: string, op?: string): Sentry.Transaction | null {
+export function startTransaction(name: string, op?: string): any {
   try {
-    return Sentry.startTransaction({
+    // Use startSpan for newer Sentry versions
+    if (typeof Sentry.startSpan === 'function') {
+      return Sentry.startSpan({
+        name,
+        op: op || 'custom',
+      }, (span) => span);
+    }
+    // Fallback for older versions
+    return Sentry.startTransaction && Sentry.startTransaction({
       name,
       op: op || 'custom',
     });
@@ -214,11 +222,16 @@ export function startTransaction(name: string, op?: string): Sentry.Transaction 
 }
 
 /**
- * Get the current Sentry transaction
+ * Get the current Sentry span/transaction
  */
-export function getCurrentTransaction(): Sentry.Transaction | undefined {
+export function getCurrentTransaction(): any {
   try {
-    return Sentry.getCurrentHub().getScope()?.getTransaction();
+    // Try newer API first
+    if (typeof Sentry.getActiveSpan === 'function') {
+      return Sentry.getActiveSpan();
+    }
+    // Fallback for older versions
+    return Sentry.getCurrentHub && Sentry.getCurrentHub().getScope()?.getTransaction();
   } catch (err) {
     console.error('Failed to get current transaction:', err);
     return undefined;
