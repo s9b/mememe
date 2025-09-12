@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import Link from 'next/link';
 
 interface AdBannerProps {
-  isAdSafe: boolean;
+  allowedForAds: boolean;
   slot?: string;
   format?: 'auto' | 'rectangle' | 'vertical' | 'horizontal';
   responsive?: boolean;
@@ -17,7 +17,7 @@ declare global {
 }
 
 const AdBanner: React.FC<AdBannerProps> = ({
-  isAdSafe,
+  allowedForAds,
   slot,
   format = 'auto',
   responsive = true,
@@ -27,17 +27,17 @@ const AdBanner: React.FC<AdBannerProps> = ({
   const adSenseId = process.env.NEXT_PUBLIC_ADSENSE_ID;
 
   useEffect(() => {
-    if (isAdSafe && adSenseId && typeof window !== 'undefined') {
+    if (allowedForAds && adSenseId && typeof window !== 'undefined') {
       try {
         (window.adsbygoogle = window.adsbygoogle || []).push({});
       } catch (err) {
         console.error('AdSense error:', err);
       }
     }
-  }, [isAdSafe, adSenseId]);
+  }, [allowedForAds, adSenseId]);
 
   // Don't render anything if content is not ad-safe
-  if (!isAdSafe) {
+  if (!allowedForAds) {
     if (showPremiumCTA) {
       return <PremiumCTA />;
     }
@@ -127,7 +127,7 @@ export default AdBanner;
 // Utility function to check if all generated results are ad-safe
 export const checkAdSafety = (
   results: Array<{ templateId: string }>,
-  templates: Array<{ id: string; isAdSafe: boolean }>
+  templates: Array<{ id: string; allowedForAds: boolean }>
 ): boolean => {
   if (!results || results.length === 0) {
     return false;
@@ -135,14 +135,14 @@ export const checkAdSafety = (
 
   return results.every(result => {
     const template = templates.find(t => t.id === result.templateId);
-    return template?.isAdSafe === true;
+    return template?.allowedForAds === true;
   });
 };
 
 // Hook for checking ad safety based on template data
 export const useAdSafety = (
   results: Array<{ templateId: string }> | null,
-  templates: Array<{ id: string; isAdSafe: boolean }>
+  templates: Array<{ id: string; allowedForAds: boolean }>
 ) => {
   if (!results || results.length === 0) {
     return false;

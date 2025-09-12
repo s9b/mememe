@@ -12,7 +12,7 @@ interface MemeResult {
 interface Template {
   id: string;
   name: string;
-  isAdSafe: boolean;
+  allowedForAds: boolean;
 }
 
 const MemeGenerator: React.FC = () => {
@@ -85,7 +85,7 @@ const MemeGenerator: React.FC = () => {
       {results && results.length > 0 && (
         <div className="mb-8">
           <AdBanner
-            isAdSafe={isAdSafe}
+            allowedForAds={isAdSafe}
             slot="1234567890" // Replace with your actual AdSense slot ID
             format="auto"
             responsive={true}
@@ -120,11 +120,11 @@ const MemeGenerator: React.FC = () => {
                   <p className="text-xs text-gray-500">Template: {result.templateId}</p>
                   <div className="mt-2 flex items-center justify-between">
                     <span className={`text-xs px-2 py-1 rounded ${
-                      templates.find(t => t.id === result.templateId)?.isAdSafe
+                      templates.find(t => t.id === result.templateId)?.allowedForAds
                         ? 'bg-green-100 text-green-800'
                         : 'bg-red-100 text-red-800'
                     }`}>
-                      {templates.find(t => t.id === result.templateId)?.isAdSafe ? 'Ad-safe' : 'Ad-unsafe'}
+                      {templates.find(t => t.id === result.templateId)?.allowedForAds ? 'Ad-safe' : 'Ad-unsafe'}
                     </span>
                     <button className="text-blue-600 hover:text-blue-800 text-sm">
                       Download
@@ -155,7 +155,7 @@ const MemeGenerator: React.FC = () => {
       {/* Bottom Ad Banner - Always show (for ad-safe content or premium CTA) */}
       <div className="mt-12">
         <AdBanner
-          isAdSafe={true} // Always show bottom ads or premium CTA
+          allowedForAds={true} // Always show bottom ads or premium CTA
           slot="0987654321" // Different slot for bottom banner
           format="horizontal"
           responsive={true}

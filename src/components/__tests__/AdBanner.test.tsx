@@ -31,7 +31,7 @@ afterEach(() => {
 
 describe('AdBanner', () => {
   const defaultProps = {
-    isAdSafe: true,
+    allowedForAds: true,
     slot: '1234567890',
   };
 
@@ -80,7 +80,7 @@ describe('AdBanner', () => {
 
   describe('Ad Safety Logic', () => {
     it('shows premium CTA when content is not ad-safe', () => {
-      render(<AdBanner {...defaultProps} isAdSafe={false} />);
+      render(<AdBanner {...defaultProps} allowedForAds={false} />);
 
       expect(screen.getByText('Go Premium!')).toBeInTheDocument();
       expect(screen.getByText('Remove ads and unlock unlimited meme generation with premium templates')).toBeInTheDocument();
@@ -89,7 +89,7 @@ describe('AdBanner', () => {
 
     it('returns null when content is not ad-safe and showPremiumCTA is false', () => {
       const { container } = render(
-        <AdBanner {...defaultProps} isAdSafe={false} showPremiumCTA={false} />
+        <AdBanner {...defaultProps} allowedForAds={false} showPremiumCTA={false} />
       );
 
       expect(container.firstChild).toBeNull();
@@ -153,9 +153,9 @@ describe('AdBanner', () => {
 
 describe('checkAdSafety', () => {
   const templates = [
-    { id: '1', name: 'Safe Template', isAdSafe: true },
-    { id: '2', name: 'Unsafe Template', isAdSafe: false },
-    { id: '3', name: 'Another Safe Template', isAdSafe: true },
+    { id: '1', name: 'Safe Template', allowedForAds: true },
+    { id: '2', name: 'Unsafe Template', allowedForAds: false },
+    { id: '3', name: 'Another Safe Template', allowedForAds: true },
   ];
 
   it('returns true when all results are from ad-safe templates', () => {
@@ -192,9 +192,9 @@ describe('checkAdSafety', () => {
     expect(checkAdSafety(results, templates)).toBe(false);
   });
 
-  it('handles templates with undefined isAdSafe property', () => {
+  it('handles templates with undefined allowedForAds property', () => {
     const templatesWithUndefined = [
-      { id: '1', name: 'Template', isAdSafe: undefined as any },
+      { id: '1', name: 'Template', allowedForAds: undefined as any },
     ];
     const results = [{ templateId: '1' }];
 
@@ -204,8 +204,8 @@ describe('checkAdSafety', () => {
 
 describe('useAdSafety', () => {
   const templates = [
-    { id: '1', name: 'Safe Template', isAdSafe: true },
-    { id: '2', name: 'Unsafe Template', isAdSafe: false },
+    { id: '1', name: 'Safe Template', allowedForAds: true },
+    { id: '2', name: 'Unsafe Template', allowedForAds: false },
   ];
 
   // Create a test component to test the hook
@@ -245,7 +245,7 @@ describe('useAdSafety', () => {
 
 describe('Premium CTA Component', () => {
   it('renders with correct styling and content', () => {
-    render(<AdBanner isAdSafe={false} />);
+    render(<AdBanner allowedForAds={false} />);
 
     const ctaContainer = document.querySelector('.premium-cta');
     expect(ctaContainer).toHaveClass('bg-gradient-to-r', 'from-purple-500', 'to-pink-500');
@@ -263,7 +263,7 @@ describe('Ad Placeholder Component', () => {
   it('renders when AdSense is not configured and showPremiumCTA is false', () => {
     delete process.env.NEXT_PUBLIC_ADSENSE_ID;
 
-    render(<AdBanner isAdSafe={true} showPremiumCTA={false} />);
+    render(<AdBanner allowedForAds={true} showPremiumCTA={false} />);
 
     expect(screen.getByText('Advertisement Space')).toBeInTheDocument();
     expect(screen.getByText('Configure NEXT_PUBLIC_ADSENSE_ID to show ads')).toBeInTheDocument();
