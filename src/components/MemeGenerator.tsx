@@ -18,7 +18,9 @@ interface Template {
 const MemeGenerator: React.FC = () => {
   const [results, setResults] = useState<MemeResult[] | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
   const [topic, setTopic] = useState('');
+  const [usedTemplateIds, setUsedTemplateIds] = useState<string[]>([]);
 
   const templates: Template[] = templatesData.templates;
   const isAdSafe = useAdSafety(results, templates);
@@ -42,10 +44,52 @@ const MemeGenerator: React.FC = () => {
 
       const data = await response.json();
       setResults(data.results);
+      
+      // Track used template IDs for regeneration
+      if (data.results && data.results.length > 0) {
+        const templateIds = [...new Set(data.results.map((r: MemeResult) => r.templateId))];
+        setUsedTemplateIds(templateIds);
+      }
     } catch (error) {
       console.error('Error generating memes:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleRegenerate = async () => {
+    if (!results || results.length === 0 || !topic.trim()) return;
+
+    setIsRegenerating(true);
+    try {
+      const captions = results.map(r => r.caption);
+      
+      const response = await fetch('/api/regenerate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          topic, 
+          captions,
+          usedTemplateIds 
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to regenerate memes');
+      }
+
+      const data = await response.json();
+      setResults(data.results);
+      
+      // Add the new template ID to used templates
+      setUsedTemplateIds(prev => [...prev, data.newTemplateId]);
+      
+    } catch (error) {
+      console.error('Error regenerating memes:', error);
+    } finally {
+      setIsRegenerating(false);
     }
   };
 
@@ -73,11 +117,24 @@ const MemeGenerator: React.FC = () => {
           />
           <button
             onClick={handleGenerate}
-            disabled={isLoading || !topic.trim()}
+            disabled={isLoading || isRegenerating || !topic.trim()}
             className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isLoading ? 'Generating...' : 'Generate Memes'}
           </button>
+          
+          {results && results.length > 0 && (
+            <button
+              onClick={handleRegenerate}
+              disabled={isLoading || isRegenerating || !topic.trim()}
+              className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              {isRegenerating ? 'Regenerating...' : 'Try Different Template'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -138,10 +195,19 @@ const MemeGenerator: React.FC = () => {
       )}
 
       {/* Loading State */}
-      {isLoading && (
+      {(isLoading || isRegenerating) && (
         <div className="text-center py-12">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-2 text-gray-600">Generating your memes...</p>
+          <div className={`inline-block animate-spin rounded-full h-8 w-8 border-b-2 ${
+            isRegenerating ? 'border-green-600' : 'border-blue-600'
+          }`}></div>
+          <p className="mt-2 text-gray-600">
+            {isRegenerating ? '🎲 Finding a different template...' : 'Generating your memes...'}
+          </p>
+          {isRegenerating && (
+            <p className="mt-1 text-sm text-gray-500">
+              Using AI to pick a better template for your topic!
+            </p>
+          )}
         </div>
       )}
 

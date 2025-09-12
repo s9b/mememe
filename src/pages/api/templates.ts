@@ -1,16 +1,15 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import templates from '../../data/templates.json';
-import type { Template } from '../../types/templates';
+import { getTrendingTemplates, MemeTemplate } from '../../lib/templates';
 
 interface ResponseData {
-  templates: Array<Template>;
+  templates: MemeTemplate[];
 }
 
 interface ErrorResponse {
   error: string;
 }
 
-export default function handler(
+export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse<ResponseData | ErrorResponse>
 ) {
@@ -19,7 +18,8 @@ export default function handler(
   }
 
   try {
-    res.status(200).json({ templates: templates.templates as Array<Template> });
+    const templates = await getTrendingTemplates();
+    res.status(200).json({ templates });
   } catch (error) {
     console.error('Error fetching templates:', error);
     res.status(500).json({ error: 'Failed to fetch templates' });

@@ -3,6 +3,7 @@ import { moderateText } from '../../lib/moderation';
 import { generateCaptions } from '../../lib/generateCaptions';
 import { generateCaptionsWithGemini, moderateWithGemini } from '../../lib/gemini';
 import { renderMeme } from '../../lib/imgflip';
+import { getCombinedTrendingTemplates, selectSmartTemplate } from '../../lib/templates';
 import { uploadToCloudinary } from '../../lib/cloudinary';
 import { rateLimitMiddleware } from '../../lib/rateLimit';
 import { 
@@ -142,8 +143,29 @@ export default async function handler(
       level: 'info'
     });
 
-    // 3. Generate captions (using Gemini as free alternative)
-    const captions = await generateCaptionsWithGemini(topic, templateId);
+    // 3. Get combined trending templates and use smart AI selection
+    let finalTemplateId = templateId;
+    const excludeIds: string[] = [];
+    
+    if (!finalTemplateId) {
+      try {
+        const availableTemplates = await getCombinedTrendingTemplates();
+        finalTemplateId = await selectSmartTemplate(topic, availableTemplates, true, excludeIds);
+        
+        addBreadcrumb({
+          message: `🤖 AI-selected template ${finalTemplateId} for topic`,
+          category: 'template-selection',
+          level: 'info',
+          data: { topic, selectedTemplate: finalTemplateId, method: 'AI' }
+        });
+      } catch (error) {
+        console.error('Error selecting template, using default:', error);
+        finalTemplateId = '181913649'; // Fallback to Drake
+      }
+    }
+
+    // 4. Generate captions (using Gemini as free alternative)
+    const captions = await generateCaptionsWithGemini(topic, finalTemplateId);
 
     addBreadcrumb({
       message: `Generated ${captions.length} captions`,
@@ -171,8 +193,8 @@ export default async function handler(
         ? caption.split('|').map(part => part.trim())
         : [caption, ''];
 
-      // Use provided templateId or default to a common one if not provided
-      const templateIdToUse = templateId || '181913649'; // Drake Hotline Bling template as default
+      // Use the automatically selected template
+      const templateIdToUse = finalTemplateId;
 
       // 5. Run moderation on the caption (using Gemini as free alternative)
       const captionModerationResult = await moderateWithGemini(caption);
