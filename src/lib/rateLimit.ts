@@ -101,7 +101,8 @@ const rateLimitWithRedis = async (ip: string): Promise<RateLimitResult> => {
       throw new Error('Redis multi execution failed');
     }
     
-    const currentCount = (results[1]?.reply as number) || 0;
+    // Redis multi returns array of results, second result is zCard count
+    const currentCount = Number(results[1]) || 0;
     
     if (currentCount >= RATE_LIMIT_MAX_REQUESTS) {
       return {
