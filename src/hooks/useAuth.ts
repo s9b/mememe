@@ -103,12 +103,16 @@ export const useAuth = (): UseAuthReturn => {
       // Update existing user
       await setDoc(userRef, userData, { merge: true });
     } else {
-      // Create new user document
+      // Create new user document with initial tokens
       await setDoc(userRef, {
         ...userData,
         createdAt: serverTimestamp(),
         memesGenerated: 0,
-        isPremium: false
+        isPremium: false,
+        tokenCount: 10, // Free tokens for new users
+        totalTokensUsed: 0,
+        totalTokensPurchased: 0,
+        lastTokenGrant: serverTimestamp()
       });
     }
   };

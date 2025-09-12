@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import AdBanner, { useAdSafety } from './AdBanner';
 import AuthModal from './AuthModal';
+import BuyTokensModal from './BuyTokensModal';
 import { useAuth } from '../hooks/useAuth';
+import { useTokens } from '../hooks/useTokens';
 import templatesData from '../data/templates.json';
 
 // Mock types to match your existing structure
@@ -19,12 +21,14 @@ interface Template {
 
 const MemeGenerator: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
+  const { tokens, canGenerate, decrementTokens, loading: tokensLoading, error: tokenError } = useTokens();
   const [results, setResults] = useState<MemeResult[] | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [topic, setTopic] = useState('');
   const [usedTemplateIds, setUsedTemplateIds] = useState<string[]>([]);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showBuyTokensModal, setShowBuyTokensModal] = useState(false);
 
   const templates: Template[] = templatesData.templates;
   const isAdSafe = useAdSafety(results, templates);
@@ -35,6 +39,25 @@ const MemeGenerator: React.FC = () => {
     // Check if user is authenticated
     if (!user) {
       setShowAuthModal(true);
+      return;
+    }
+    
+    // Check if user has enough tokens
+    if (!canGenerate) {
+      if (tokens === 0) {
+        setShowBuyTokensModal(true);
+        return;
+      }
+      return; // Loading or other token issues
+    }
+    
+    // Decrement tokens first (optimistic update)
+    const tokenSuccess = await decrementTokens(1);
+    if (!tokenSuccess) {
+      // Token decrement failed, don't proceed
+      if (tokens === 0) {
+        setShowBuyTokensModal(true);
+      }
       return;
     }
 
@@ -73,6 +96,24 @@ const MemeGenerator: React.FC = () => {
     // Check if user is authenticated
     if (!user) {
       setShowAuthModal(true);
+      return;
+    }
+    
+    // Check if user has enough tokens for regeneration
+    if (!canGenerate) {
+      if (tokens === 0) {
+        setShowBuyTokensModal(true);
+        return;
+      }
+      return; // Loading or other token issues
+    }
+    
+    // Decrement tokens first for regeneration
+    const tokenSuccess = await decrementTokens(1);
+    if (!tokenSuccess) {
+      if (tokens === 0) {
+        setShowBuyTokensModal(true);
+      }
       return;
     }
 
@@ -133,10 +174,17 @@ const MemeGenerator: React.FC = () => {
           />
           <button
             onClick={handleGenerate}
-            disabled={isLoading || isRegenerating || !topic.trim()}
-            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={isLoading || isRegenerating || !topic.trim() || !canGenerate}
+            className={`px-6 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+              !canGenerate && user && tokens === 0
+                ? 'bg-orange-600 text-white hover:bg-orange-700'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}
           >
-            {isLoading ? 'Generating...' : 'Generate Memes'}
+            {isLoading ? 'Generating...' : 
+             !user ? 'Sign In to Generate' :
+             !canGenerate && tokens === 0 ? '🪙 Buy Tokens to Generate' : 
+             'Generate Memes'}
           </button>
           
           {results && results.length > 0 && (
@@ -152,6 +200,28 @@ const MemeGenerator: React.FC = () => {
             </button>
           )}
         </div>
+        
+        {/* Token Error Display */}
+        {tokenError && (
+          <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
+            <p className="text-red-600 text-sm">{tokenError}</p>
+          </div>
+        )}
+        
+        {/* Token Info for Users */}
+        {user && tokens < 3 && tokens > 0 && (
+          <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+            <p className="text-yellow-800 text-sm">
+              ⚠️ You have <strong>{tokens} token{tokens !== 1 ? 's' : ''}</strong> remaining. 
+              <button 
+                onClick={() => setShowBuyTokensModal(true)}
+                className="text-yellow-900 underline hover:no-underline font-medium ml-1"
+              >
+                Buy more tokens
+              </button> to continue generating memes.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Ad Banner - Show after results */}
@@ -272,6 +342,12 @@ const MemeGenerator: React.FC = () => {
       <AuthModal
         isOpen={showAuthModal}
         onClose={() => setShowAuthModal(false)}
+      />
+      
+      {/* Buy Tokens Modal */}
+      <BuyTokensModal
+        isOpen={showBuyTokensModal}
+        onClose={() => setShowBuyTokensModal(false)}
       />
     </div>
   );

@@ -4,12 +4,16 @@
 
 import React, { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { useTokens } from '../hooks/useTokens';
 import AuthModal from './AuthModal';
+import BuyTokensModal from './BuyTokensModal';
 
 const Navbar: React.FC = () => {
   const { user, logout, loading } = useAuth();
+  const { tokens, loading: tokensLoading } = useTokens();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showBuyTokensModal, setShowBuyTokensModal] = useState(false);
 
   const handleLogout = async () => {
     try {
@@ -53,8 +57,27 @@ const Navbar: React.FC = () => {
               {loading ? (
                 <div className="w-8 h-8 bg-gray-200 rounded-full animate-pulse"></div>
               ) : user ? (
-                /* Logged In State */
-                <div className="relative">
+                <>
+                  {/* Token Badge */}
+                  <div className="flex items-center space-x-2">
+                    <div className="bg-blue-50 border border-blue-200 rounded-full px-3 py-1 flex items-center space-x-2">
+                      <div className="w-4 h-4 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full flex items-center justify-center">
+                        <span className="text-xs text-white font-bold">🪙</span>
+                      </div>
+                      <span className="text-sm font-medium text-blue-700">
+                        {tokensLoading ? '...' : tokens}
+                      </span>
+                    </div>
+                    
+                    <button
+                      onClick={() => setShowBuyTokensModal(true)}
+                      className="text-xs bg-gradient-to-r from-blue-600 to-purple-600 text-white px-2 py-1 rounded-full hover:from-blue-700 hover:to-purple-700 transition-all duration-200 font-medium"
+                    >
+                      Buy More
+                    </button>
+                  </div>
+                  {/* User Menu */}
+                  <div className="relative">
                   <button
                     onClick={() => setShowUserMenu(!showUserMenu)}
                     className="flex items-center space-x-3 text-gray-700 hover:text-blue-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded-md p-1"
@@ -118,6 +141,12 @@ const Navbar: React.FC = () => {
                         >
                           ⚙️ Settings
                         </a>
+                        <button
+                          onClick={() => setShowBuyTokensModal(true)}
+                          className="block w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 transition-colors"
+                        >
+                          🪙 Buy Tokens ({tokens} remaining)
+                        </button>
                         <a
                           href="#pricing"
                           className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
@@ -136,7 +165,8 @@ const Navbar: React.FC = () => {
                       </div>
                     </div>
                   )}
-                </div>
+                  </div>
+                </>
               ) : (
                 /* Logged Out State */
                 <div className="flex items-center space-x-3">
@@ -178,6 +208,12 @@ const Navbar: React.FC = () => {
       <AuthModal
         isOpen={showAuthModal}
         onClose={() => setShowAuthModal(false)}
+      />
+      
+      {/* Buy Tokens Modal */}
+      <BuyTokensModal
+        isOpen={showBuyTokensModal}
+        onClose={() => setShowBuyTokensModal(false)}
       />
     </>
   );
