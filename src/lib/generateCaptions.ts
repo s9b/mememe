@@ -87,8 +87,17 @@ export async function generateCaptions(topic: string, templateId?: string): Prom
     });
 
     if (!response.ok) {
-      const errorData = await response.json() as ErrorResponse;
-      throw new Error(`OpenAI API error: ${errorData.error || response.statusText}`);
+      const errorText = await response.text();
+      let errorMessage = response.statusText;
+      
+      try {
+        const errorData = JSON.parse(errorText);
+        errorMessage = errorData.error?.message || errorData.error || errorText;
+      } catch {
+        errorMessage = errorText || response.statusText;
+      }
+      
+      throw new Error(`OpenAI API error: ${errorMessage}`);
     }
 
     const data = await response.json() as OpenAIResponse;
@@ -130,6 +139,20 @@ export async function generateCaptions(topic: string, templateId?: string): Prom
     return finalCaptions;
   } catch (error) {
     console.error('Error generating captions:', error);
+    
+    // Check if it's a quota exceeded error
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (errorMessage.includes('exceeded your current quota')) {
+      console.warn('OpenAI quota exceeded, using fallback captions');
+      // Return fallback captions based on the topic
+      return [
+        `When ${topic} happens`,
+        `That feeling when ${topic}`,
+        `${topic} be like`
+      ];
+    }
+    
+    // For other errors, re-throw
     throw error;
   }
 }

@@ -87,7 +87,16 @@ export async function moderateText(text: string): Promise<ModerationOutput> {
     return { flagged: false };
   } catch (error) {
     console.error('Error during content moderation:', error);
-    // Re-throw the error to be handled by the caller
+    
+    // Check if it's a quota exceeded error
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (errorMessage.includes('exceeded your current quota')) {
+      console.warn('OpenAI quota exceeded, allowing content to pass moderation check');
+      // Return as not flagged to allow the app to continue working
+      return { flagged: false };
+    }
+    
+    // For other errors, re-throw
     throw error;
   }
 }

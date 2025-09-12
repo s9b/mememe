@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { moderateText } from '../../lib/moderation';
 import { generateCaptions } from '../../lib/generateCaptions';
+import { generateCaptionsWithGemini, moderateWithGemini } from '../../lib/gemini';
 import { renderMeme } from '../../lib/imgflip';
 import { uploadToCloudinary } from '../../lib/cloudinary';
 import { rateLimitMiddleware } from '../../lib/rateLimit';
@@ -119,8 +120,8 @@ export default async function handler(
       level: 'info'
     });
 
-    // 2. Run moderation on input
-    const moderationResult = await moderateText(topic);
+    // 2. Run moderation on input (using Gemini as free alternative)
+    const moderationResult = await moderateWithGemini(topic);
     if (moderationResult.flagged) {
       addBreadcrumb({
         message: 'Content moderation rejected input',
@@ -141,8 +142,8 @@ export default async function handler(
       level: 'info'
     });
 
-    // 3. Generate captions
-    const captions = await generateCaptions(topic, templateId);
+    // 3. Generate captions (using Gemini as free alternative)
+    const captions = await generateCaptionsWithGemini(topic, templateId);
 
     addBreadcrumb({
       message: `Generated ${captions.length} captions`,
@@ -173,8 +174,8 @@ export default async function handler(
       // Use provided templateId or default to a common one if not provided
       const templateIdToUse = templateId || '181913649'; // Drake Hotline Bling template as default
 
-      // 5. Run moderation on the caption
-      const captionModerationResult = await moderateText(caption);
+      // 5. Run moderation on the caption (using Gemini as free alternative)
+      const captionModerationResult = await moderateWithGemini(caption);
       if (captionModerationResult.flagged) {
         moderatedCaptions++;
         addBreadcrumb({
@@ -280,7 +281,9 @@ export default async function handler(
       
       // Ensure events are flushed before response
       await flushEvents(1000);
-      transaction?.finish();
+      if (transaction && typeof transaction.finish === 'function') {
+        transaction.finish();
+      }
       
       return res.status(500).json({ error: 'Failed to generate any valid memes' });
     }
@@ -304,7 +307,9 @@ export default async function handler(
     
     // Ensure events are flushed before response
     await flushEvents(1000);
-    transaction?.finish();
+    if (transaction && typeof transaction.finish === 'function') {
+      transaction.finish();
+    }
 
     return res.status(200).json({ results });
   } catch (error) {
@@ -335,8 +340,12 @@ export default async function handler(
     
     // Ensure events are flushed before response
     await flushEvents(1000);
-    transaction?.setStatus('internal_error');
-    transaction?.finish();
+    if (transaction && typeof transaction.setStatus === 'function') {
+      transaction.setStatus('internal_error');
+    }
+    if (transaction && typeof transaction.finish === 'function') {
+      transaction.finish();
+    }
     
     return res.status(500).json({ error: 'Internal server error' });
   }

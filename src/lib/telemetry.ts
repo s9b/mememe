@@ -208,12 +208,24 @@ export function startTransaction(name: string, op?: string): any {
     if (typeof (Sentry as any).startSpan === 'function') {
       return (Sentry as any).startSpan({ name, op: op || 'custom' }, (span: any) => span);
     }
-    // Otherwise return a no-op object
-    return { finish: () => {}, setTag: () => {}, setData: () => {} };
+    // Otherwise return a no-op object with all expected methods
+    return { 
+      finish: () => {}, 
+      setTag: () => {}, 
+      setData: () => {},
+      setStatus: () => {},
+      setContext: () => {}
+    };
   } catch (err) {
     console.error('Failed to start transaction:', err);
     // Return a no-op object to prevent crashes
-    return { finish: () => {}, setTag: () => {}, setData: () => {} };
+    return { 
+      finish: () => {}, 
+      setTag: () => {}, 
+      setData: () => {},
+      setStatus: () => {},
+      setContext: () => {}
+    };
   }
 }
 
