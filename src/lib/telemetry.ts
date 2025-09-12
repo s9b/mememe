@@ -200,38 +200,35 @@ export function trackPageView(page?: string): void {
 
 /**
  * Start a Sentry transaction/span for performance monitoring
+ * Simplified to avoid API compatibility issues
  */
 export function startTransaction(name: string, op?: string): any {
   try {
-    // Use startSpan for newer Sentry versions
-    if (typeof Sentry.startSpan === 'function') {
-      return Sentry.startSpan({
-        name,
-        op: op || 'custom',
-      }, (span) => span);
+    // Use modern startSpan API if available
+    if (typeof (Sentry as any).startSpan === 'function') {
+      return (Sentry as any).startSpan({ name, op: op || 'custom' }, (span: any) => span);
     }
-    // Fallback for older versions
-    return Sentry.startTransaction && Sentry.startTransaction({
-      name,
-      op: op || 'custom',
-    });
+    // Otherwise return a no-op object
+    return { finish: () => {}, setTag: () => {}, setData: () => {} };
   } catch (err) {
     console.error('Failed to start transaction:', err);
-    return null;
+    // Return a no-op object to prevent crashes
+    return { finish: () => {}, setTag: () => {}, setData: () => {} };
   }
 }
 
 /**
  * Get the current Sentry span/transaction
+ * Simplified to avoid API compatibility issues
  */
 export function getCurrentTransaction(): any {
   try {
-    // Try newer API first
-    if (typeof Sentry.getActiveSpan === 'function') {
-      return Sentry.getActiveSpan();
+    // Try modern API if available
+    if (typeof (Sentry as any).getActiveSpan === 'function') {
+      return (Sentry as any).getActiveSpan();
     }
-    // Fallback for older versions
-    return Sentry.getCurrentHub && Sentry.getCurrentHub().getScope()?.getTransaction();
+    // Return undefined if not available
+    return undefined;
   } catch (err) {
     console.error('Failed to get current transaction:', err);
     return undefined;
