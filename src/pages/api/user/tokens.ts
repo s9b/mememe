@@ -1,16 +1,15 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { getUserTokens, UserTokenData } from '../../../lib/firebase-admin';
-import { rateLimitMiddleware } from '../../../lib/rateLimit';
-import { 
-  captureException, 
-  addBreadcrumb, 
-  setExtra,
-  startTransaction,
-  flushEvents 
-} from '../../../lib/telemetry';
+import { adminAuth, adminDb } from '../../../lib/firebaseAdmin';
 
-interface TokenResponse extends Partial<UserTokenData> {
+// Free token system: 20 tokens that refill every 7 days
+const FREE_TOKENS = 20;
+const REFILL_INTERVAL_DAYS = 7;
+
+interface TokenResponse {
   tokens: number;
+  email?: string;
+  nextRefillDate: string;
+  daysUntilRefill: number;
 }
 
 interface ErrorResponse {
@@ -19,77 +18,95 @@ interface ErrorResponse {
 }
 
 /**
- * Get user's token balance and statistics
+ * Get user's token balance with automatic 7-day refill system
  * GET /api/user/tokens
  */
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse<TokenResponse | ErrorResponse>
 ) {
-  const transaction = startTransaction('get-user-tokens', 'http.server');
-  
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
-    // Apply rate limiting
-    const rateLimitPassed = await rateLimitMiddleware(req, res);
-    if (!rateLimitPassed) {
-      return;
-    }
-
-    // Get userId from query parameter (in production, you'd get this from JWT/session)
-    const userId = req.headers.authorization?.replace('Bearer ', '');
-    
-    if (!userId || typeof userId !== 'string') {
+    // Verify authentication
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) {
       return res.status(401).json({ 
         error: 'User authentication required',
         code: 'UNAUTHORIZED'
       });
     }
 
-    setExtra('user_id', userId);
+    const token = authHeader.substring(7);
+    const decodedToken = await adminAuth.verifyIdToken(token);
+    const userId = decodedToken.uid;
 
-    addBreadcrumb({
-      message: 'Fetching user token data',
-      category: 'api',
-      level: 'info',
-      data: { userId }
-    });
+    // Get user document
+    const userDoc = await adminDb.collection('users').doc(userId).get();
+    
+    const now = new Date();
+    let userData;
+    
+    if (!userDoc.exists) {
+      // Create new user with 20 free tokens
+      userData = {
+        email: decodedToken.email,
+        tokens: FREE_TOKENS,
+        createdAt: now,
+        lastLogin: now,
+        lastTokenRefill: now,
+        totalTokensUsed: 0
+      };
+      
+      await adminDb.collection('users').doc(userId).set(userData);
+      console.log(`New user created with ${FREE_TOKENS} free tokens:`, userId);
+    } else {
+      userData = userDoc.data();
+      
+      // Check if it's time for token refill (7 days)
+      const lastRefill = userData?.lastTokenRefill?.toDate() || userData?.createdAt?.toDate();
+      const daysSinceRefill = (now.getTime() - lastRefill.getTime()) / (1000 * 60 * 60 * 24);
+      
+      if (daysSinceRefill >= REFILL_INTERVAL_DAYS) {
+        // Refill tokens to 20
+        userData.tokens = FREE_TOKENS;
+        userData.lastTokenRefill = now;
+        
+        await adminDb.collection('users').doc(userId).update({
+          tokens: FREE_TOKENS,
+          lastTokenRefill: now,
+          lastLogin: now
+        });
+        
+        console.log(`Tokens refilled for user ${userId}: ${FREE_TOKENS} tokens`);
+      } else {
+        // Just update last login
+        await adminDb.collection('users').doc(userId).update({
+          lastLogin: now
+        });
+      }
+    }
 
-    const tokens = await getUserTokens(userId);
+    // Calculate days until next refill
+    const lastRefill = userData.lastTokenRefill || userData.createdAt;
+    const refillTime = lastRefill instanceof Date ? lastRefill : lastRefill.toDate();
+    const nextRefillDate = new Date(refillTime.getTime() + (REFILL_INTERVAL_DAYS * 24 * 60 * 60 * 1000));
+    const daysUntilRefill = Math.max(0, Math.ceil((nextRefillDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
 
     const response: TokenResponse = {
-      tokens,
-      // These would come from the full user record in a real implementation
-      totalTokensPurchased: 0,
-      totalTokensUsed: 0
+      tokens: userData.tokens || 0,
+      email: userData.email,
+      nextRefillDate: nextRefillDate.toISOString(),
+      daysUntilRefill
     };
-
-    await flushEvents(1000);
-    if (transaction && typeof transaction.finish === 'function') {
-      transaction.finish();
-    }
 
     return res.status(200).json(response);
 
   } catch (error) {
-    console.error('Error fetching user tokens:', error);
+    console.error('Error getting user tokens:', error);
     
-    captureException(error as Error, {
-      operation: 'get-user-tokens',
-      user_agent: req.headers['user-agent']
-    });
-
-    await flushEvents(1000);
-    if (transaction && typeof transaction.setStatus === 'function') {
-      transaction.setStatus('internal_error');
-    }
-    if (transaction && typeof transaction.finish === 'function') {
-      transaction.finish();
-    }
-
     return res.status(500).json({ 
       error: 'Failed to fetch token balance',
       code: 'INTERNAL_ERROR'
