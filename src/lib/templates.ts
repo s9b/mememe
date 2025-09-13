@@ -89,7 +89,7 @@ export async function getPopularRedditTemplates(): Promise<string[]> {
     const cached = await cache.get('reddit_templates');
     if (cached) {
       console.log('Cache hit for Reddit templates');
-      return JSON.parse(cached);
+      return JSON.parse(cached as string);
     }
 
     console.log('Fetching popular templates from Reddit...');
@@ -136,7 +136,7 @@ export async function getPopularRedditTemplates(): Promise<string[]> {
       const templateMatch = title.match(/\[(.*?)\]/g);
       if (templateMatch) {
         templateMatch.forEach(match => {
-          const clean = match.replace(/[\[\]]/g, '').toLowerCase().trim();
+          const clean = match.replace(/\[|\]/g, '').toLowerCase().trim();
           if (clean.length > 2 && clean.length < 50 && !templateNames.includes(clean)) {
             templateNames.push(clean);
           }
@@ -162,16 +162,36 @@ export async function getPopularRedditTemplates(): Promise<string[]> {
 
 /**
  * Get combined trending templates from both Imgflip and Reddit
- * Deduplicates and prioritizes based on popularity
+ * Uses cached viral templates for faster performance, falls back to live fetching
  * @returns Promise resolving to array of trending meme templates
  */
 export async function getCombinedTrendingTemplates(): Promise<MemeTemplate[]> {
   try {
-    // Check cache first
+    // First, try to get viral templates from the new cache system
+    const { getViralTemplates } = await import('./viralTemplates');
+    const viralTemplates = await getViralTemplates(false); // Don't force refresh
+    
+    if (viralTemplates && viralTemplates.length > 0) {
+      console.log(`🔥 Using viral templates cache: ${viralTemplates.length} templates`);
+      // Convert CachedTemplate to MemeTemplate format
+      return viralTemplates.map(template => ({
+        id: template.id,
+        name: template.name,
+        url: template.url,
+        width: template.width,
+        height: template.height,
+        box_count: template.box_count,
+        captions: template.captions
+      }));
+    }
+    
+    console.log('📦 Viral cache miss, falling back to legacy combined templates...');
+    
+    // Fallback to old cache system
     const cached = await cache.get('combined_templates');
     if (cached) {
-      console.log('Cache hit for combined trending templates');
-      return JSON.parse(cached);
+      console.log('Cache hit for legacy combined trending templates');
+      return JSON.parse(cached as string);
     }
 
     console.log('Fetching and combining templates from multiple sources...');
@@ -244,7 +264,7 @@ export async function getTrendingTemplates(): Promise<MemeTemplate[]> {
     const cached = await cache.get('trending_templates');
     if (cached) {
       console.log('Cache hit for trending templates');
-      return JSON.parse(cached);
+      return JSON.parse(cached as string);
     }
 
     console.log('Fetching trending templates from Imgflip...');
@@ -464,19 +484,32 @@ Respond with ONLY the template ID (like "181913649"). No explanation, just the I
 
 /**
  * Smart template selection that combines AI and randomization
+ * Uses viral templates for better selection if available
  * @param topic - The meme topic
- * @param availableTemplates - Array of available templates
+ * @param availableTemplates - Array of available templates (optional, will fetch viral templates if not provided)
  * @param useAI - Whether to use AI selection (default: true)
  * @param excludeIds - Template IDs to exclude from selection
  * @returns Selected template ID
  */
 export async function selectSmartTemplate(
   topic: string,
-  availableTemplates: MemeTemplate[],
+  availableTemplates?: MemeTemplate[],
   useAI: boolean = true,
   excludeIds: string[] = []
 ): Promise<string> {
-  const eligibleTemplates = availableTemplates.filter(t => !excludeIds.includes(t.id));
+  // If no templates provided, get viral templates first
+  let templates = availableTemplates;
+  if (!templates || templates.length === 0) {
+    try {
+      console.log('🔥 No templates provided, fetching viral templates for smart selection...');
+      templates = await getCombinedTrendingTemplates();
+    } catch (error) {
+      console.error('Failed to fetch viral templates, using fallback:', error);
+      templates = getFallbackTemplates();
+    }
+  }
+  
+  const eligibleTemplates = templates.filter(t => !excludeIds.includes(t.id));
   
   if (eligibleTemplates.length === 0) {
     return '181913649'; // Ultimate fallback

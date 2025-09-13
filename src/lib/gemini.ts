@@ -41,9 +41,10 @@ interface GeminiResponse {
  * Generate meme captions using Google Gemini API (free alternative to OpenAI)
  * @param topic - The topic for the meme captions
  * @param templateId - Optional template ID to provide context
+ * @param language - Language code for caption generation (e.g., 'en', 'es', 'fr')
  * @returns Promise resolving to an array of 3 captions
  */
-export async function generateCaptionsWithGemini(topic: string, templateId?: string): Promise<string[]> {
+export async function generateCaptionsWithGemini(topic: string, templateId?: string, language: string = 'en'): Promise<string[]> {
   if (!topic) {
     throw new Error('Topic is required');
   }
@@ -58,14 +59,14 @@ export async function generateCaptionsWithGemini(topic: string, templateId?: str
     ];
   }
 
-  const prompt = `You are a meme caption generator. Create exactly 3 short, funny meme captions (max 10 words each) about "${topic}". Each caption should be on its own line. Make them humorous but appropriate. Template context: ${templateId || 'general meme'}
+  // Language-specific instructions and examples
+  const languageInstructions = getLanguageInstructions(language);
+  
+  const prompt = `You are a meme caption generator. Create exactly 3 short, funny meme captions (max 10 words each) about "${topic}" in ${languageInstructions.name}. Each caption should be on its own line. Make them humorous but appropriate. Template context: ${templateId || 'general meme'}
 
-Examples:
-- When Monday hits different
-- That feeling when it's Friday
-- Coffee be like my bestie
+${languageInstructions.examples}
 
-Generate 3 captions for topic: ${topic}`;
+Generate 3 captions in ${languageInstructions.name} for topic: ${topic}`;
 
   try {
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
@@ -118,14 +119,8 @@ Generate 3 captions for topic: ${topic}`;
     // Ensure we have exactly 3 captions
     if (captions.length < 3) {
       // Pad with fallback captions if needed
+      const fallbacks = getLanguageFallbacks(language, topic);
       while (captions.length < 3) {
-        const fallbacks = [
-          `When ${topic} happens`,
-          `That feeling when ${topic}`,
-          `${topic} be like`,
-          `Me when ${topic}`,
-          `${topic} hits different`
-        ];
         captions.push(fallbacks[captions.length] || `Caption about ${topic}`);
       }
     }
@@ -136,11 +131,8 @@ Generate 3 captions for topic: ${topic}`;
     
     // Fallback to template-based captions
     console.warn('Using fallback captions due to Gemini error');
-    return [
-      `When ${topic} happens`,
-      `That feeling when ${topic}`,
-      `${topic} be like`
-    ];
+    const fallbacks = getLanguageFallbacks(language, topic);
+    return fallbacks.slice(0, 3);
   }
 }
 
@@ -219,4 +211,157 @@ Respond with only one word: SAFE or UNSAFE`;
     // Fail safe - allow content if moderation fails
     return { flagged: false };
   }
+}
+
+/**
+ * Get language-specific instructions and examples for meme generation
+ */
+function getLanguageInstructions(languageCode: string): { name: string; examples: string } {
+  const languages: Record<string, { name: string; examples: string }> = {
+    en: {
+      name: 'English',
+      examples: 'Examples:\n- When Monday hits different\n- That feeling when it\'s Friday\n- Coffee be like my bestie'
+    },
+    es: {
+      name: 'Spanish',
+      examples: 'Ejemplos:\n- Cuando llega el lunes\n- Esa sensación cuando es viernes\n- El café es mi mejor amigo'
+    },
+    fr: {
+      name: 'French',
+      examples: 'Exemples:\n- Quand lundi arrive\n- Cette sensation quand c\'est vendredi\n- Le café c\'est mon meilleur ami'
+    },
+    de: {
+      name: 'German',
+      examples: 'Beispiele:\n- Wenn Montag anders trifft\n- Das Gefühl wenn Freitag ist\n- Kaffee ist wie mein bester Freund'
+    },
+    it: {
+      name: 'Italian',
+      examples: 'Esempi:\n- Quando arriva lunedì\n- Quella sensazione quando è venerdì\n- Il caffè è il mio migliore amico'
+    },
+    pt: {
+      name: 'Portuguese',
+      examples: 'Exemplos:\n- Quando segunda-feira chega\n- Aquela sensação quando é sexta\n- Café é meu melhor amigo'
+    },
+    ru: {
+      name: 'Russian',
+      examples: 'Примеры:\n- Когда понедельник по-разному\n- Это чувство когда пятница\n- Кофе - мой лучший друг'
+    },
+    ja: {
+      name: 'Japanese',
+      examples: '例:\n- 月曜日が違うとき\n- 金曜日の気持ち\n- コーヒーは私の親友'
+    },
+    ko: {
+      name: 'Korean',
+      examples: '예시:\n- 월요일이 다르게 느껴질 때\n- 금요일의 그 느낌\n- 커피는 내 친구'
+    },
+    zh: {
+      name: 'Chinese',
+      examples: '例子：\n- 当周一变得不同\n- 周五的感觉\n- 咖啡是我的好朋友'
+    },
+    ar: {
+      name: 'Arabic',
+      examples: 'أمثلة:\n- عندما يأتي يوم الاثنين مختلف\n- هذا الشعور عندما يوم الجمعة\n- القهوة مثل أفضل صديق'
+    },
+    hi: {
+      name: 'Hindi',
+      examples: 'उदाहरण:\n- जब सोमवार अलग लगता है\n- शुक्रवार की वह फीलिंग\n- कॉफी मेरा सबसे अच्छा दोस्त'
+    }
+  };
+
+  return languages[languageCode] || languages.en;
+}
+
+/**
+ * Get language-specific fallback captions
+ */
+function getLanguageFallbacks(languageCode: string, topic: string): string[] {
+  const fallbacks: Record<string, (topic: string) => string[]> = {
+    en: (topic) => [
+      `When ${topic} happens`,
+      `That feeling when ${topic}`,
+      `${topic} be like`,
+      `Me when ${topic}`,
+      `${topic} hits different`
+    ],
+    es: (topic) => [
+      `Cuando ${topic} pasa`,
+      `Esa sensación cuando ${topic}`,
+      `${topic} así es`,
+      `Yo cuando ${topic}`,
+      `${topic} pega diferente`
+    ],
+    fr: (topic) => [
+      `Quand ${topic} arrive`,
+      `Cette sensation quand ${topic}`,
+      `${topic} c'est comme ça`,
+      `Moi quand ${topic}`,
+      `${topic} ça frappe différent`
+    ],
+    de: (topic) => [
+      `Wenn ${topic} passiert`,
+      `Das Gefühl wenn ${topic}`,
+      `${topic} ist so`,
+      `Ich wenn ${topic}`,
+      `${topic} trifft anders`
+    ],
+    it: (topic) => [
+      `Quando ${topic} succede`,
+      `Quella sensazione quando ${topic}`,
+      `${topic} è così`,
+      `Io quando ${topic}`,
+      `${topic} colpisce diverso`
+    ],
+    pt: (topic) => [
+      `Quando ${topic} acontece`,
+      `Aquela sensação quando ${topic}`,
+      `${topic} é assim`,
+      `Eu quando ${topic}`,
+      `${topic} bate diferente`
+    ],
+    ru: (topic) => [
+      `Когда ${topic} случается`,
+      `Это чувство когда ${topic}`,
+      `${topic} вот так`,
+      `Я когда ${topic}`,
+      `${topic} по-другому бьёт`
+    ],
+    ja: (topic) => [
+      `${topic}が起こるとき`,
+      `${topic}の気持ち`,
+      `${topic}って感じ`,
+      `${topic}の時の私`,
+      `${topic}は違う`
+    ],
+    ko: (topic) => [
+      `${topic}이 일어날 때`,
+      `${topic}의 그 느낌`,
+      `${topic}은 이래`,
+      `${topic}일 때의 나`,
+      `${topic}은 다르다`
+    ],
+    zh: (topic) => [
+      `当${topic}发生时`,
+      `${topic}的那种感觉`,
+      `${topic}就是这样`,
+      `${topic}时的我`,
+      `${topic}不同了`
+    ],
+    ar: (topic) => [
+      `عندما يحدث ${topic}`,
+      `هذا الشعور عند ${topic}`,
+      `${topic} هكذا`,
+      `أنا عند ${topic}`,
+      `${topic} مختلف`
+    ],
+    hi: (topic) => [
+      `जब ${topic} होता है`,
+      `${topic} की वह फीलिंग`,
+      `${topic} ऐसे है`,
+      `मैं जब ${topic}`,
+      `${topic} अलग लगता है`
+    ]
+  };
+
+  const fallbackGenerator = fallbacks[languageCode] || fallbacks.en;
+  return fallbackGenerator(topic);
 }

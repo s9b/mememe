@@ -6,9 +6,15 @@
   "devCommand": "npm run dev",
   "functions": {
     "src/pages/api/**/*.ts": {
-      "maxDuration": 30
+      "maxDuration": 300
     }
   },
+  "crons": [
+    {
+      "path": "/api/cron/refresh-templates",
+      "schedule": "0 */6 * * *"
+    }
+  ],
   "headers": [
     {
       "source": "/api/(.*)",

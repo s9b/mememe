@@ -6,6 +6,7 @@ import { renderMeme } from '../../lib/imgflip';
 import { getCombinedTrendingTemplates, selectSmartTemplate } from '../../lib/templates';
 import { uploadToCloudinary } from '../../lib/cloudinary';
 import { rateLimitMiddleware } from '../../lib/rateLimit';
+import { hasUserSufficientTokens, consumeUserTokens } from '../../lib/firebase-admin';
 import { 
   captureException, 
   captureMessage,
@@ -16,10 +17,15 @@ import {
   flushEvents 
 } from '../../lib/telemetry';
 
+// Token cost for meme generation
+const MEME_GENERATION_TOKEN_COST = 1;
+
 // Define types for the API
 interface GenerateRequest {
   topic: string;
   templateId?: string;
+  userId?: string; // Include userId for token checking
+  language?: string; // Language code for caption generation
 }
 
 interface GenerateResult {
@@ -34,6 +40,8 @@ interface GenerateResponse {
 
 interface ErrorResponse {
   error: string;
+  code?: string;
+  requiredTokens?: number;
 };
 
 /**
@@ -90,17 +98,19 @@ export default async function handler(
       return; // rateLimitMiddleware already sent the 429 response
     }
 
-    const { topic, templateId } = req.body as GenerateRequest;
+    const { topic, templateId, userId, language = 'en' } = req.body as GenerateRequest;
 
     // Set request context for debugging
     setExtra('request_topic', topic);
     setExtra('request_template_id', templateId);
+    setExtra('request_user_id', userId);
+    setExtra('request_language', language);
 
     addBreadcrumb({
       message: 'Processing meme generation request',
       category: 'processing',
       level: 'info',
-      data: { topic, templateId }
+      data: { topic, templateId, userId, language }
     });
 
     // 1. Validate input
@@ -115,13 +125,43 @@ export default async function handler(
       return res.status(400).json({ error: 'Topic is required' });
     }
 
+    // 2. Token validation and consumption (if userId provided)
+    if (userId) {
+      // Check if user has sufficient tokens
+      const hasSufficientTokens = await hasUserSufficientTokens(userId, MEME_GENERATION_TOKEN_COST);
+      if (!hasSufficientTokens) {
+        addBreadcrumb({
+          message: 'Request rejected - insufficient tokens',
+          category: 'tokens',
+          level: 'warning',
+          data: { userId, requiredTokens: MEME_GENERATION_TOKEN_COST }
+        });
+        trackEvent('insufficient_tokens', {
+          userId,
+          requiredTokens: MEME_GENERATION_TOKEN_COST
+        });
+        return res.status(402).json({ 
+          error: 'Insufficient tokens', 
+          code: 'INSUFFICIENT_TOKENS',
+          requiredTokens: MEME_GENERATION_TOKEN_COST
+        });
+      }
+      
+      addBreadcrumb({
+        message: 'Token validation passed',
+        category: 'tokens',
+        level: 'info',
+        data: { userId, requiredTokens: MEME_GENERATION_TOKEN_COST }
+      });
+    }
+
     addBreadcrumb({
       message: 'Input validation passed',
       category: 'validation',
       level: 'info'
     });
 
-    // 2. Run moderation on input (using Gemini as free alternative)
+    // 3. Run moderation on input (using Gemini as free alternative)
     const moderationResult = await moderateWithGemini(topic);
     if (moderationResult.flagged) {
       addBreadcrumb({
@@ -143,7 +183,7 @@ export default async function handler(
       level: 'info'
     });
 
-    // 3. Get combined trending templates and use smart AI selection
+    // 4. Get combined trending templates and use smart AI selection
     let finalTemplateId = templateId;
     const excludeIds: string[] = [];
     
@@ -164,8 +204,8 @@ export default async function handler(
       }
     }
 
-    // 4. Generate captions (using Gemini as free alternative)
-    const captions = await generateCaptionsWithGemini(topic, finalTemplateId);
+    // 5. Generate captions (using Gemini as free alternative)
+    const captions = await generateCaptionsWithGemini(topic, finalTemplateId, language);
 
     addBreadcrumb({
       message: `Generated ${captions.length} captions`,
@@ -174,7 +214,7 @@ export default async function handler(
       data: { captionCount: captions.length, topic, templateId }
     });
 
-    // 4. Render memes for each caption
+    // 6. Render memes for each caption
     const results: GenerateResult[] = [];
     let successfulGenerations = 0;
     let failedGenerations = 0;
@@ -196,7 +236,7 @@ export default async function handler(
       // Use the automatically selected template
       const templateIdToUse = finalTemplateId;
 
-      // 5. Run moderation on the caption (using Gemini as free alternative)
+      // 7. Run moderation on the caption (using Gemini as free alternative)
       const captionModerationResult = await moderateWithGemini(caption);
       if (captionModerationResult.flagged) {
         moderatedCaptions++;
@@ -213,7 +253,7 @@ export default async function handler(
         // Generate the meme image
         const imageUrl = await renderMeme(templateIdToUse, captionTop, captionBottom);
 
-        // 6. Store the image URL (using Imgflip URL directly for MVP)
+        // 8. Store the image URL (using Imgflip URL directly for MVP)
         // For production, you might want to use uploadToCloudinary(imageUrl)
         
         // Add to results
@@ -262,13 +302,59 @@ export default async function handler(
       }
     }
 
-    // 7. Return the results
+    // 9. Consume tokens if generation was successful and user provided
+    if (userId && results.length > 0) {
+      try {
+        const memeId = `meme_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        const tokenConsumed = await consumeUserTokens(userId, MEME_GENERATION_TOKEN_COST, memeId);
+        
+        if (tokenConsumed) {
+          addBreadcrumb({
+            message: 'Tokens consumed successfully',
+            category: 'tokens',
+            level: 'info',
+            data: { 
+              userId, 
+              tokensConsumed: MEME_GENERATION_TOKEN_COST, 
+              memeId 
+            }
+          });
+          trackEvent('tokens_consumed', {
+            userId,
+            tokensConsumed: MEME_GENERATION_TOKEN_COST,
+            memeId,
+            generatedMemes: results.length
+          });
+        } else {
+          // This shouldn't happen if validation passed, but handle gracefully
+          console.warn('Failed to consume tokens after successful generation');
+          addBreadcrumb({
+            message: 'Warning: Failed to consume tokens after successful generation',
+            category: 'tokens',
+            level: 'warning',
+            data: { userId, tokensRequired: MEME_GENERATION_TOKEN_COST }
+          });
+        }
+      } catch (error) {
+        console.error('Error consuming tokens:', error);
+        captureException(error as Error, {
+          operation: 'token-consumption',
+          userId,
+          tokensRequired: MEME_GENERATION_TOKEN_COST
+        });
+        // Don't fail the entire request if token consumption fails
+        // The memes were successfully generated
+      }
+    }
+
+    // 10. Return the results
     const generationSummary = {
       totalCaptions: captions.length,
       successfulGenerations,
       failedGenerations,
       moderatedCaptions,
-      finalResults: results.length
+      finalResults: results.length,
+      tokensConsumed: userId && results.length > 0 ? MEME_GENERATION_TOKEN_COST : 0
     };
     
     setExtra('generation_summary', generationSummary);

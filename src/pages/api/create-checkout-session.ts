@@ -1,93 +1,214 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import Stripe from 'stripe';
+import { stripe, getTokenPackageById, TOKEN_PACKAGES } from '../../lib/stripe';
+import { rateLimitMiddleware } from '../../lib/rateLimit';
+import { 
+  captureException, 
+  addBreadcrumb, 
+  setExtra,
+  startTransaction,
+  trackEvent,
+  flushEvents 
+} from '../../lib/telemetry';
 
-if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error('STRIPE_SECRET_KEY is not set in environment variables');
+interface CheckoutRequest {
+  packageId: string;
+  userId: string;
 }
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: '2023-08-16',
-});
+interface CheckoutResponse {
+  sessionId: string;
+  url: string;
+}
 
+interface ErrorResponse {
+  error: string;
+  code?: string;
+}
+
+/**
+ * Create Stripe checkout session for token purchases
+ * POST /api/create-checkout-session
+ * Body: { packageId: string, userId: string }
+ */
 export default async function handler(
   req: NextApiRequest,
-  res: NextApiResponse
+  res: NextApiResponse<CheckoutResponse | ErrorResponse>
 ) {
-  if (req.method !== 'POST') {
-    res.setHeader('Allow', 'POST');
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+  const transaction = startTransaction('create-checkout-session', 'http.server');
+  
+  addBreadcrumb({
+    message: 'Checkout session creation started',
+    category: 'api',
+    level: 'info',
+    data: {
+      method: req.method,
+      userAgent: req.headers['user-agent']
+    }
+  });
 
   try {
-    const { priceId, successUrl, cancelUrl } = req.body;
+    // Only allow POST requests
+    if (req.method !== 'POST') {
+      return res.status(405).json({ error: 'Method not allowed' });
+    }
 
-    // Validate required parameters
-    if (!priceId) {
+    // Apply rate limiting
+    const rateLimitPassed = await rateLimitMiddleware(req, res);
+    if (!rateLimitPassed) {
+      trackEvent('rate_limit_exceeded', {
+        ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress
+      });
+      return;
+    }
+
+    const { packageId, userId } = req.body as CheckoutRequest;
+
+    // Set request context
+    setExtra('package_id', packageId);
+    setExtra('user_id', userId);
+
+    // Validate input
+    if (!packageId || typeof packageId !== 'string') {
       return res.status(400).json({ 
-        error: 'Missing required parameter: priceId' 
+        error: 'Package ID is required',
+        code: 'INVALID_PACKAGE_ID'
       });
     }
 
-    // Set default URLs if not provided
-    const baseUrl = req.headers.origin || 'http://localhost:3000';
-    const defaultSuccessUrl = `${baseUrl}/pricing?success=true`;
-    const defaultCancelUrl = `${baseUrl}/pricing?canceled=true`;
+    if (!userId || typeof userId !== 'string') {
+      return res.status(400).json({ 
+        error: 'User ID is required',
+        code: 'INVALID_USER_ID'
+      });
+    }
 
-    // Create Checkout Sessions from body params
-    const session = await stripe.checkout.sessions.create({
-      ui_mode: 'hosted',
-      line_items: [
-        {
-          price: priceId,
-          quantity: 1,
-        },
-      ],
-      mode: 'subscription',
-      success_url: successUrl || defaultSuccessUrl,
-      cancel_url: cancelUrl || defaultCancelUrl,
-      automatic_tax: { enabled: true },
-      billing_address_collection: 'required',
-      customer_creation: 'always',
-      metadata: {
-        source: 'mememe-app',
-        plan: 'premium'
-      },
-      subscription_data: {
-        metadata: {
-          source: 'mememe-app',
-          plan: 'premium'
-        }
+    // Get the token package
+    const tokenPackage = getTokenPackageById(packageId);
+    if (!tokenPackage) {
+      addBreadcrumb({
+        message: 'Invalid package ID provided',
+        category: 'validation',
+        level: 'error',
+        data: { packageId, availablePackages: TOKEN_PACKAGES.map(p => p.id) }
+      });
+      
+      return res.status(400).json({ 
+        error: 'Invalid package ID',
+        code: 'PACKAGE_NOT_FOUND'
+      });
+    }
+
+    addBreadcrumb({
+      message: 'Creating Stripe checkout session',
+      category: 'stripe',
+      level: 'info',
+      data: { 
+        packageId: tokenPackage.id,
+        tokens: tokenPackage.tokens,
+        price: tokenPackage.price,
+        userId
       }
     });
 
-    if (!session.url) {
-      throw new Error('Failed to create checkout session URL');
+    // Create Stripe checkout session
+    const session = await stripe.checkout.sessions.create({
+      mode: 'payment',
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: `${tokenPackage.name} - ${tokenPackage.tokens} Tokens`,
+              description: tokenPackage.description,
+              metadata: {
+                packageId: packageId,
+                tokens: tokenPackage.tokens.toString()
+              }
+            },
+            unit_amount: Math.round(tokenPackage.price * 100), // Convert to cents
+          },
+          quantity: 1,
+        },
+      ],
+      success_url: `${req.headers.origin}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${req.headers.origin}/?cancelled=true`,
+      metadata: {
+        userId: userId,
+        packageId: packageId,
+        tokens: tokenPackage.tokens.toString(),
+        price: tokenPackage.price.toString()
+      },
+      customer_email: undefined, // Will be filled by Stripe if user provides email
+      billing_address_collection: 'auto'
+    });
+
+    addBreadcrumb({
+      message: 'Stripe checkout session created successfully',
+      category: 'stripe',
+      level: 'info',
+      data: { 
+        sessionId: session.id,
+        url: session.url,
+        packageId: tokenPackage.id,
+        userId
+      }
+    });
+
+    // Track checkout session creation
+    trackEvent('checkout_session_created', {
+      sessionId: session.id,
+      userId,
+      packageId,
+      tokens: tokenPackage.tokens,
+      price: tokenPackage.price
+    });
+
+    await flushEvents(1000);
+    if (transaction && typeof transaction.finish === 'function') {
+      transaction.finish();
     }
 
-    res.status(200).json({ 
+    return res.status(200).json({ 
       sessionId: session.id,
-      url: session.url 
+      url: session.url!
     });
-  } catch (err: any) {
-    console.error('Stripe checkout session creation failed:', err);
+
+  } catch (error) {
+    console.error('Error creating checkout session:', error);
     
-    // Return appropriate error messages
-    if (err.type === 'StripeCardError') {
-      res.status(400).json({ error: err.message });
-    } else if (err.type === 'StripeRateLimitError') {
-      res.status(429).json({ error: 'Too many requests made to the API too quickly' });
-    } else if (err.type === 'StripeInvalidRequestError') {
-      res.status(400).json({ error: 'Invalid parameters were supplied to Stripe\'s API' });
-    } else if (err.type === 'StripeAPIError') {
-      res.status(500).json({ error: 'An error occurred internally with Stripe\'s API' });
-    } else if (err.type === 'StripeConnectionError') {
-      res.status(500).json({ error: 'Some kind of error occurred during the HTTPS communication' });
-    } else if (err.type === 'StripeAuthenticationError') {
-      res.status(401).json({ error: 'You probably used an incorrect API key' });
-    } else {
-      res.status(500).json({ 
-        error: 'An unexpected error occurred while creating checkout session' 
-      });
+    captureException(error as Error, {
+      operation: 'create-checkout-session',
+      request_body: req.body,
+      user_agent: req.headers['user-agent']
+    });
+
+    addBreadcrumb({
+      message: 'Checkout session creation failed',
+      category: 'error',
+      level: 'fatal',
+      data: {
+        error: (error as Error).message,
+        stack: (error as Error).stack?.substring(0, 500)
+      }
+    });
+
+    trackEvent('checkout_session_error', {
+      error_type: 'stripe_error',
+      error_message: (error as Error).message
+    });
+
+    await flushEvents(1000);
+    if (transaction && typeof transaction.setStatus === 'function') {
+      transaction.setStatus('internal_error');
     }
+    if (transaction && typeof transaction.finish === 'function') {
+      transaction.finish();
+    }
+
+    return res.status(500).json({ 
+      error: 'Failed to create checkout session',
+      code: 'STRIPE_ERROR'
+    });
   }
 }

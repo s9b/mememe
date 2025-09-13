@@ -5,13 +5,27 @@
 :root {
   --foreground-rgb: 0, 0, 0;
   --background-rgb: 255, 255, 255;
+  
+  /* Toast theming */
+  --toast-bg: #ffffff;
+  --toast-text: #374151;
+  --toast-border: #e5e7eb;
+  --toast-success-bg: #f0fdf4;
+  --toast-error-bg: #fef2f2;
+  --toast-loading-bg: #faf5ff;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-rgb: 0, 0, 0;
-  }
+.dark {
+  --foreground-rgb: 255, 255, 255;
+  --background-rgb: 24, 24, 27;
+  
+  /* Dark theme toast colors */
+  --toast-bg: #374151;
+  --toast-text: #f9fafb;
+  --toast-border: #4b5563;
+  --toast-success-bg: #064e3b;
+  --toast-error-bg: #7f1d1d;
+  --toast-loading-bg: #581c87;
 }
 
 body {
